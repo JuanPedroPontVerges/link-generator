@@ -19,6 +19,7 @@ export const serverSchema = z.object({
     // VERCEL_URL doesn't include `https` so it cant be validated as a URL
     process.env.VERCEL ? z.string() : z.string().url(),
   ),
+  MERCADOPAGO_ACCESS_TOKEN: z.string(),
 });
 
 /**
@@ -30,7 +31,8 @@ export const serverEnv = {
   DATABASE_URL: process.env.DATABASE_URL,
   NODE_ENV: process.env.NODE_ENV,
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  NEXTAUTH_URL: process.env.NEXTAUTH_URL
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN
 };
 
 /**
