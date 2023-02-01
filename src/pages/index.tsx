@@ -7,20 +7,23 @@ import { type NextPage } from "next";
 import Head from "next/head";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { api } from "../utils/api";
-import { Combobox } from "@headlessui/react";
 import { useForm } from "react-hook-form";
-import { useEffect, useState } from "react";
+import { Fragment, useState } from "react";
+import { Combobox, Transition } from "@headlessui/react";
+import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
 type FormInput = {
   venueId: string;
   finalPrice: number;
+  availableVenues: number;
 };
 
 const Home: NextPage = () => {
   const venues = api.cacao.getAllVenues.useQuery();
-  const [selectedVenueId, setSelectedVenueId] = useState(venues?.data?.[0]);
+  const [selectedVenue, setSelectedVenue] = useState(venues?.data?.[0]);
   const [query, setQuery] = useState("");
   const form = useForm<FormInput>();
   if (venues.isLoading) return <>Loading!!!...</>;
+  const subscription = selectedVenue?.organization.subscription;
   const filteredVenues =
     query === ""
       ? venues.data
@@ -30,15 +33,13 @@ const Home: NextPage = () => {
         });
 
   const handleSelectVenue = (venue: any) => {
-    setSelectedVenueId(venue);
+    setSelectedVenue(venue);
+    if (venue.organization.subscription) {
+      console.log("subscription", venue);
+      form.setValue("finalPrice", venue.organization.subscription.finalPrice || 0);
+      form.setValue("availableVenues", venue.organization.subscription.availableVenues || 0);
+    }
   };
-
-  const selectedVenue = venues.data?.find(
-    (venue: any) => venue.id === selectedVenueId
-  );
-  
-  console.log("SETTING PRICE !!!: ", selectedVenue?.finalPrice);
-  form.setValue("finalPrice", selectedVenue?.finalPrice);
   return (
     <>
       <Head>
@@ -54,28 +55,80 @@ const Home: NextPage = () => {
           <div className="grid grid-cols-1 gap-4">
             <div className="flex max-w-xl flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20">
               <h3 className="text-2xl font-bold">Cacao subscriptions</h3>
-              <Combobox
-                value={selectedVenueId}
-                {...form.register("venueId")}
-                onChange={handleSelectVenue}
-                as="Fragment"
-              >
-                <Combobox.Input
-                  className={"p-2 text-black"}
-                  onChange={(event) => setQuery(event?.target?.value)}
-                />
-                <Combobox.Options>
-                  {filteredVenues.map((venue: any) => (
-                    <Combobox.Option key={venue.id} value={venue.id}>
-                      {venue.name}
-                    </Combobox.Option>
-                  ))}
-                </Combobox.Options>
+              <Combobox value={selectedVenue} onChange={handleSelectVenue}>
+                <div className="relative mt-1">
+                  <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+                    <Combobox.Input
+                      className="w-full border-none py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
+                      displayValue={(venue: any) => venue.name}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                    <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
+                      <ChevronUpDownIcon
+                        className="h-5 w-5 text-gray-400"
+                        aria-hidden="true"
+                      />
+                    </Combobox.Button>
+                  </div>
+                  <Transition
+                    as={Fragment}
+                    leave="transition ease-in duration-100"
+                    leaveFrom="opacity-100"
+                    leaveTo="opacity-0"
+                    afterLeave={() => setQuery("")}
+                  >
+                    <Combobox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                      {filteredVenues.length === 0 && query !== "" ? (
+                        <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
+                          Nothing found.
+                        </div>
+                      ) : (
+                        filteredVenues.map((venue: any) => (
+                          <Combobox.Option
+                            key={venue.id}
+                            className={({ active }) =>
+                              `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                                active
+                                  ? "bg-teal-600 text-white"
+                                  : "text-gray-900"
+                              }`
+                            }
+                            value={venue}
+                          >
+                            {({ selected, active }) => (
+                              <>
+                                <span
+                                  className={`block truncate ${
+                                    selected ? "font-medium" : "font-normal"
+                                  }`}
+                                >
+                                  {venue.name}
+                                </span>
+                                {selected ? (
+                                  <span
+                                    className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                      active ? "text-white" : "text-teal-600"
+                                    }`}
+                                  >
+                                    <CheckIcon
+                                      className="h-5 w-5"
+                                      aria-hidden="true"
+                                    />
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
+                          </Combobox.Option>
+                        ))
+                      )}
+                    </Combobox.Options>
+                  </Transition>
+                </div>
               </Combobox>
             </div>
             {selectedVenue ? (
               <form>
-                <div className="flex max-w-xl flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20">
+                <div className="flex  max-w-xl flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20">
                   <h3 className="text-center text-2xl font-bold">
                     {selectedVenue?.name}
                   </h3>
@@ -85,38 +138,46 @@ const Home: NextPage = () => {
                       {selectedVenue?.address}
                     </p>
                   </div>
-                  {selectedVenue.organization.subscription ? (
-                    <>
-                      <div className="flex items-center gap-3">
-                        <p className="text-xl font-bold">
-                          Estado de suscripción:
-                        </p>
-                        <p className="text-sm font-bold">
-                          {selectedVenue?.organization?.subscription?.status}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <p className="text-xl font-bold">Precio:</p>
-                        <input
-                          type="number"
-                          className="w-full rounded-xl border-[2px] border-[#828384] bg-[#f8fafc] p-2.5 text-base font-light !text-black placeholder:text-gray-600"
-                          {...form.register("finalPrice")}
-                        />
-                        <p className="text-sm font-bold">
-                          {/* ${selectedVenue?.organization?.subscription?.finalPrice} */}
-                        </p>
-                      </div>
-                      <button
-                        type="submit"
-                        className="
+                  {subscription ? (
+                    <div className="flex items-center gap-3">
+                      <p className="text-xl font-bold">
+                        Estado de suscripción:
+                      </p>
+                      <p className="text-sm font-bold">
+                        {selectedVenue?.organization?.subscription?.status}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center gap-3">
+                    <p className="text-xl font-bold">Cantidad de sucursales:</p>
+                    <input
+                      type="number"
+                      className="rounded-lg border-[2px] border-[#828384] bg-[#f8fafc] p-1 text-base font-light !text-black placeholder:text-gray-600"
+                      {...form.register("availableVenues")}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xl font-bold">Precio:</p>
+                    <input
+                      type="number"
+                      className="w-full rounded-lg border-[2px] border-[#828384] bg-[#f8fafc] p-1 text-base font-light !text-black placeholder:text-gray-600"
+                      {...form.register("finalPrice")}
+                    />
+                    <p className="text-sm font-bold">
+                      {/* ${selectedVenue?.organization?.subscription?.finalPrice} */}
+                    </p>
+                  </div>
+                  {subscription ? (
+                    <button
+                      type="submit"
+                      className="
                         rounded-md bg-indigo-600 px-3.5 py-1.5 text-base font-semibold leading-7 text-white shadow-sm 
                         hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 
                         focus-visible:outline-indigo-600
                       "
-                      >
-                        Actualizar precio
-                      </button>
-                    </>
+                    >
+                      Actualizar precio
+                    </button>
                   ) : (
                     <button
                       type="submit"
@@ -126,7 +187,7 @@ const Home: NextPage = () => {
                       focus-visible:outline-indigo-600
                     "
                     >
-                      Crear subscripción
+                      Crear suscripción
                     </button>
                   )}
                 </div>
